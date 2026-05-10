@@ -102,4 +102,11 @@ Markdown のレンダリングはブラウザ側で [marked](https://marked.js.o
 
 ## ライセンス
 
-個人利用想定。
+Copyright (c) 2026 matudapoke
+
+- 個人利用・改変・再配布は自由（著作権表示と本ライセンスの保持が条件）
+- 商用利用は事前にご相談ください（連絡先: matuda.business@gmail.com）
+- 著作権は作者が留保します
+- 無保証
+
+詳細は [LICENSE](LICENSE) を参照してください。
