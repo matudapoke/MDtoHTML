@@ -226,7 +226,7 @@
 			hljsDarkLink.disabled = false;
 		} else {
 			document.body.classList.remove("theme-dark");
-			themeToggleBtn.textContent = "🌙";
+			themeToggleBtn.textContent = "☾";
 			hljsLightLink.disabled = false;
 			hljsDarkLink.disabled = true;
 		}
@@ -281,8 +281,22 @@
 				alert("ソースファイルパスが取得できませんでした。");
 				return;
 			}
-			// パスを URL エンコードして mdtohtml: プロトコルへ渡す
-			window.location.href = "mdtohtml:" + encodeURIComponent(path);
+			// プロトコル発火は隠しリンクのクリックで行う（現タブを遷移させない）。
+			// PowerShell 側はプロトコル呼び出し時、出力 HTML を同じパスへ上書きし
+			// 新しいタブは開かない。少し待ってから現タブを reload して結果を反映する。
+			const a = document.createElement("a");
+			a.href = "mdtohtml:" + encodeURIComponent(path);
+			a.style.display = "none";
+			document.body.appendChild(a);
+			a.click();
+			a.remove();
+
+			// PowerShell の処理時間を見込んで reload。多少長めに設定。
+			refreshBtn.disabled = true;
+			refreshBtn.textContent = "…";
+			setTimeout(() => {
+				location.reload();
+			}, 1500);
 		});
 	}
 
@@ -300,12 +314,6 @@
 			if (target) {
 				target.scrollIntoView({ block: "start" });
 			}
-		}
-
-		// タイトルを最初の h1 から設定（テンプレート側で既に設定済みでも上書き可）
-		const firstH1 = contentEl.querySelector("h1");
-		if (firstH1) {
-			document.title = firstH1.textContent;
 		}
 	}
 

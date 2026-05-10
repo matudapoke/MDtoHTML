@@ -143,7 +143,11 @@ function Open-InDefaultBrowser {
 # -----------------------------------------------------
 # mdtohtml:// プロトコル経由で呼ばれた場合、URL からファイルパスを復元
 # 例: "mdtohtml:C%3A%5CUsers%5Cuser%5Csample.md" → "C:\Users\user\sample.md"
+# プロトコル経由のときは更新ボタン由来なので、既存タブが reload する想定で
+# 新規ブラウザタブは開かない（古いタブが残らないようにするため）
+$invokedViaProtocol = $false
 if ($MarkdownPath -match '^(?i)mdtohtml:(?://)?(.+)$') {
+	$invokedViaProtocol = $true
 	$encoded = $matches[1].TrimEnd('/')
 	try {
 		$MarkdownPath = [System.Uri]::UnescapeDataString($encoded)
@@ -194,7 +198,7 @@ try {
 # プレースホルダ置換
 # -----------------------------------------------------
 $mdFileItem = Get-Item -LiteralPath $MarkdownPath
-$title = $mdFileItem.BaseName
+$title = $mdFileItem.Name
 
 # Markdown 内に </script> が含まれる場合、script タグが破壊されるためエスケープ
 $mdEscaped = $markdownText -replace '</script>', '<\/script>'
@@ -242,9 +246,13 @@ try {
 
 # -----------------------------------------------------
 # 既定ブラウザで開く
+# プロトコル経由（更新ボタン）からの呼び出しでは新タブを開かない
+# 出力 HTML ファイルは同じパスで上書きされており、呼び出し元タブが reload する
 # -----------------------------------------------------
-try {
-	Open-InDefaultBrowser -Path $outPath
-} catch {
-	Show-FatalError "ブラウザ起動に失敗しました:`r`n$($_.Exception.Message)"
+if (-not $invokedViaProtocol) {
+	try {
+		Open-InDefaultBrowser -Path $outPath
+	} catch {
+		Show-FatalError "ブラウザ起動に失敗しました:`r`n$($_.Exception.Message)"
+	}
 }
