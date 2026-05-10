@@ -3,6 +3,7 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="md-source-path" content="{{SOURCE_PATH}}">
 	<title>{{TITLE}}</title>
 	<!-- highlight.js テーマ：ライト/ダークを切替で使用 -->
 	<link id="hljs-light" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
@@ -12,6 +13,7 @@
 <body>
 	<!-- ツールバー -->
 	<div class="toolbar">
+		<button id="refresh-btn" type="button" title="HTMLを再生成（mdtohtml:// プロトコル登録が必要）">🔄</button>
 		<button id="theme-toggle" type="button" title="テーマ切替">🌙</button>
 		<button id="sidebar-toggle" type="button" title="サイドバー開閉">≡</button>
 	</div>

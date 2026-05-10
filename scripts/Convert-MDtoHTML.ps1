@@ -62,6 +62,29 @@ function Get-OutputDirectory {
 	return $dir
 }
 
+# 古い一時 HTML ファイルを削除する
+# ブラウザで閲覧中のファイルを巻き込まないよう、一定時間経過したものだけを対象にする
+function Remove-OldOutputFiles {
+	param(
+		[string]$Directory,
+		[int]$RetentionMinutes = 60
+	)
+	$threshold = (Get-Date).AddMinutes(-$RetentionMinutes)
+	try {
+		Get-ChildItem -LiteralPath $Directory -Filter "*.html" -File -ErrorAction Stop |
+			Where-Object { $_.LastWriteTime -lt $threshold } |
+			ForEach-Object {
+				try {
+					Remove-Item -LiteralPath $_.FullName -Force -ErrorAction Stop
+				} catch {
+					# 使用中などで削除できないものはスキップ
+				}
+			}
+	} catch {
+		# 列挙に失敗しても致命的ではないので無視
+	}
+}
+
 # 既定ブラウザの実行ファイルパスを取得
 # ※ HTML の関連付け（.html）ではなく、http プロトコルの既定ハンドラを使う
 function Get-DefaultBrowserPath {
@@ -118,6 +141,17 @@ function Open-InDefaultBrowser {
 # -----------------------------------------------------
 # 入力ファイルの決定
 # -----------------------------------------------------
+# mdtohtml:// プロトコル経由で呼ばれた場合、URL からファイルパスを復元
+# 例: "mdtohtml:C%3A%5CUsers%5Cuser%5Csample.md" → "C:\Users\user\sample.md"
+if ($MarkdownPath -match '^(?i)mdtohtml:(?://)?(.+)$') {
+	$encoded = $matches[1].TrimEnd('/')
+	try {
+		$MarkdownPath = [System.Uri]::UnescapeDataString($encoded)
+	} catch {
+		Show-FatalError "URL のデコードに失敗しました:`r`n$MarkdownPath"
+	}
+}
+
 if ([string]::IsNullOrWhiteSpace($MarkdownPath)) {
 	$MarkdownPath = Select-MarkdownFile
 	if ([string]::IsNullOrWhiteSpace($MarkdownPath)) {
@@ -169,16 +203,25 @@ $mdEscaped = $markdownText -replace '</script>', '<\/script>'
 $styleEscaped = $styleCss   -replace '</style>',  '<\/style>'
 $scriptEscaped = $appJs     -replace '</script>', '<\/script>'
 
+# 更新ボタン用：md ファイルの絶対パスを HTML 属性として安全な形に整形
+# meta タグの content に入れるため HTML エスケープする。JS 側で encodeURIComponent して
+# mdtohtml:// プロトコルへ渡されるので、ここでは生のパスを HTML エンコードするだけで良い。
+$sourcePathEncoded = [System.Net.WebUtility]::HtmlEncode($mdFileItem.FullName)
+
 # .NET の Replace を使用（PowerShell の -replace は正規表現のため誤爆を避ける）
-$html = $templateHtml.Replace('{{TITLE}}',    [System.Net.WebUtility]::HtmlEncode($title))
-$html = $html.Replace('{{STYLE}}',    $styleEscaped)
-$html = $html.Replace('{{SCRIPT}}',   $scriptEscaped)
-$html = $html.Replace('{{MARKDOWN}}', $mdEscaped)
+$html = $templateHtml.Replace('{{TITLE}}',       [System.Net.WebUtility]::HtmlEncode($title))
+$html = $html.Replace('{{SOURCE_PATH}}', $sourcePathEncoded)
+$html = $html.Replace('{{STYLE}}',       $styleEscaped)
+$html = $html.Replace('{{SCRIPT}}',      $scriptEscaped)
+$html = $html.Replace('{{MARKDOWN}}',    $mdEscaped)
 
 # -----------------------------------------------------
 # 出力先（一時フォルダ）に書き出し
 # -----------------------------------------------------
 $outDir = Get-OutputDirectory
+
+# 古い出力ファイル（既定: 60 分以上前）を掃除
+Remove-OldOutputFiles -Directory $outDir -RetentionMinutes 60
 
 # ファイル名衝突を避けるためハッシュ付加
 $hash = [System.BitConverter]::ToString(

@@ -21,6 +21,7 @@
 	const themeToggleBtn = document.getElementById("theme-toggle");
 	const sidebarToggleBtn = document.getElementById("sidebar-toggle");
 	const sidebarCloseBtn = document.getElementById("sidebar-close");
+	const refreshBtn = document.getElementById("refresh-btn");
 	const mdSourceEl = document.getElementById("md-source");
 	const hljsLightLink = document.getElementById("hljs-light");
 	const hljsDarkLink = document.getElementById("hljs-dark");
@@ -270,6 +271,26 @@
 		applySidebar(false);
 		localStorage.setItem(STORAGE_KEY_SIDEBAR, "closed");
 	});
+
+	// ----- 更新（HTML 再生成） -----
+	// mdtohtml:// カスタム URI を経由して MDtoHTML.bat を再実行する。
+	// プロトコルは scripts/Register-Protocol.bat で事前に登録しておく必要がある。
+	function getSourcePath() {
+		const meta = document.querySelector('meta[name="md-source-path"]');
+		return meta ? meta.getAttribute("content") : "";
+	}
+
+	if (refreshBtn) {
+		refreshBtn.addEventListener("click", () => {
+			const path = getSourcePath();
+			if (!path) {
+				alert("ソースファイルパスが取得できませんでした。");
+				return;
+			}
+			// パスを URL エンコードして mdtohtml: プロトコルへ渡す
+			window.location.href = "mdtohtml:" + encodeURIComponent(path);
+		});
+	}
 
 	// ----- 初期化 -----
 	function init() {
