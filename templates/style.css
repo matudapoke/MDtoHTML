@@ -16,6 +16,10 @@
 	--blockquote-border: #d0d7de;
 	--link: #0969da;
 	--link-hover: #0550ae;
+	--link-glow: rgba(9, 105, 218, 0.35);
+	--danger: #cf222e;
+	--danger-hover: #a40e26;
+	--danger-glow: rgba(207, 34, 46, 0.35);
 	--table-stripe: #f6f8fa;
 	--sidebar-bg: #ffffff;
 	--sidebar-border: #d0d7de;
@@ -36,6 +40,10 @@ body.theme-dark {
 	--blockquote-border: #30363d;
 	--link: #2f81f7;
 	--link-hover: #58a6ff;
+	--link-glow: rgba(47, 129, 247, 0.45);
+	--danger: #f85149;
+	--danger-hover: #ff7b72;
+	--danger-glow: rgba(248, 81, 73, 0.45);
 	--table-stripe: #161b22;
 	--sidebar-bg: #0d1117;
 	--sidebar-border: #30363d;
@@ -53,6 +61,13 @@ body.theme-dark {
 html, body {
 	margin: 0;
 	padding: 0;
+}
+
+/* body のみに背景を設定する。html に背景を持たせると :root の --bg（=ライト白）が
+   html に効いたままになり、ダークモード+編集モード（body が fixed 要素しか抱えず縮む）
+   のときに canvas が白く見える問題が起きる。body 背景は HTML 仕様で canvas に
+   伝播するため、これだけでビューポート全体が body の bg で塗られる。 */
+body {
 	background: var(--bg);
 	color: var(--fg);
 	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Yu Gothic UI", "Meiryo", Helvetica, Arial, sans-serif;
@@ -76,6 +91,218 @@ body.sidebar-open {
 	max-width: 900px;
 	margin: 0 auto;
 	padding: 56px 32px 90vh;
+}
+
+/* ---- ワークスペース（プレビュー + エディタ） ---- */
+/* デフォルトは透過的：#content だけが見えて従来挙動と同じ */
+#editor-pane {
+	display: none;
+}
+
+/* 編集モード時：左にプレビュー、右にエディタを並べる。サイドバーは共存。 */
+body.edit-mode {
+	overflow: hidden;
+}
+
+/* workspace は viewport を覆う固定レイアウト。サイドバー開時はサイドバー幅だけ右にずらす。 */
+body.edit-mode #workspace {
+	position: fixed;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	left: 0;
+	display: grid;
+	/* JS で書き換え可能：プレビュー / スプリッター / エディタ */
+	grid-template-columns: 1fr 6px 1fr;
+	z-index: 5;
+	transition: left 0.25s ease;
+}
+
+body.edit-mode.sidebar-open #workspace {
+	left: 300px;
+}
+
+/* ドラッグ中はトランジションを切る（追従が遅れて見える） */
+body.edit-mode.is-resizing #workspace {
+	transition: none;
+}
+
+body.edit-mode #content {
+	margin: 0;
+	max-width: none;
+	height: 100%;
+	overflow-y: auto;
+	padding: 56px 32px 24px;
+}
+
+body.edit-mode #editor-pane {
+	display: block;
+	position: relative; /* .editor-actions の絶対配置基準 */
+	overflow: hidden;
+	border-left: 1px solid var(--border);
+	background: var(--bg);
+}
+
+body.edit-mode #editor {
+	width: 100%;
+	height: 100%;
+	box-sizing: border-box;
+	border: 0;
+	margin: 0;
+	/* 上は左上に浮かべる操作ボタンと重ならないよう余白を多めにとる */
+	padding: 56px 24px 24px;
+	font-family: "Consolas", "SF Mono", "Menlo", "Liberation Mono", monospace;
+	font-size: 14px;
+	line-height: 1.6;
+	background: var(--bg);
+	color: var(--fg);
+	resize: none;
+	outline: none;
+	tab-size: 4;
+	white-space: pre;
+	overflow-wrap: normal;
+	overflow-x: auto;
+	overflow-y: auto;
+}
+
+body.edit-mode #editor:focus {
+	outline: none;
+}
+
+/* ---- エディタ右上の操作ボタン（ツールバーボタンと同サイズ・色で目立たせる） ---- */
+.editor-actions {
+	position: absolute;
+	top: 12px;
+	right: 16px;
+	display: none;
+	gap: 8px;
+	z-index: 6;
+}
+
+body.edit-mode .editor-actions {
+	display: flex;
+}
+
+.editor-actions button {
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	width: 36px;
+	height: 36px;
+	font-size: 16px;
+	cursor: pointer;
+	backdrop-filter: blur(8px);
+	transition: background 0.15s ease, color 0.15s ease,
+		border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.editor-actions button:hover {
+	transform: translateY(-1px);
+}
+
+/* 保存ボタン：primary 色で常に目立たせる。未保存時は塗りに切替 */
+#save-btn {
+	background: var(--bg);
+	color: var(--link);
+	border-color: var(--link);
+	box-shadow: 0 2px 8px var(--link-glow);
+}
+
+#save-btn:hover {
+	background: var(--link);
+	color: #ffffff;
+	box-shadow: 0 4px 14px var(--link-glow);
+}
+
+#save-btn.is-dirty {
+	background: var(--link);
+	color: #ffffff;
+	border-color: var(--link);
+	box-shadow: 0 4px 14px var(--link-glow);
+}
+
+#save-btn.is-dirty:hover {
+	background: var(--link-hover);
+	border-color: var(--link-hover);
+}
+
+#save-btn:disabled {
+	opacity: 0.6;
+	cursor: progress;
+}
+
+/* 編集終了ボタン：danger 色で「閉じる」ことが分かるように */
+#edit-close-btn {
+	background: var(--bg);
+	color: var(--danger);
+	border-color: var(--danger);
+	font-size: 20px;
+	line-height: 1;
+	font-weight: 700;
+	box-shadow: 0 2px 8px var(--danger-glow);
+}
+
+#edit-close-btn:hover {
+	background: var(--danger);
+	color: #ffffff;
+	border-color: var(--danger);
+	box-shadow: 0 4px 14px var(--danger-glow);
+}
+
+/* ---- 編集モード ON 時の ✎ ボタン押下表現（アイコンは変更しない） ---- */
+#edit-toggle.is-active {
+	background: var(--sidebar-active);
+	color: var(--sidebar-active-fg);
+	border-color: var(--sidebar-active-fg);
+	box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.15), var(--shadow);
+}
+
+/* ---- スプリッター（プレビュー / エディタの境界） ---- */
+#splitter {
+	display: none;
+}
+
+body.edit-mode #splitter {
+	display: block;
+	background: var(--border);
+	cursor: col-resize;
+	user-select: none;
+	touch-action: none;
+	transition: background 0.15s ease;
+	position: relative;
+}
+
+body.edit-mode #splitter:hover,
+body.edit-mode.is-resizing #splitter {
+	background: var(--link);
+}
+
+/* ドラッグしやすいよう当たり判定を左右に拡げる（見た目は中央 6px のまま） */
+body.edit-mode #splitter::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: -4px;
+	right: -4px;
+}
+
+body.edit-mode.is-resizing {
+	cursor: col-resize;
+}
+
+body.edit-mode.is-resizing #editor,
+body.edit-mode.is-resizing #content {
+	pointer-events: none;
+}
+
+/* ---- 狭い画面：サイドバーは編集中もオーバーレイ表示（workspaceはずらさない） ---- */
+@media (max-width: 1100px) {
+	body.edit-mode.sidebar-open #workspace {
+		left: 0;
+	}
 }
 
 /* ---- 見出し ---- */

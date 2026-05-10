@@ -142,13 +142,23 @@ function Open-InDefaultBrowser {
 # 入力ファイルの決定
 # -----------------------------------------------------
 # mdtohtml:// プロトコル経由で呼ばれた場合、URL からファイルパスを復元
-# 例: "mdtohtml:C%3A%5CUsers%5Cuser%5Csample.md" → "C:\Users\user\sample.md"
-# プロトコル経由のときは更新ボタン由来なので、既存タブが reload する想定で
+# 例:
+#   "mdtohtml:C%3A%5CUsers%5Cuser%5Csample.md"           → 再生成（reload）
+#   "mdtohtml://save/C%3A%5CUsers%5Cuser%5Csample.md"    → クリップボードから保存
+# プロトコル経由のときは更新ボタン/保存ボタン由来なので、既存タブが reload する想定で
 # 新規ブラウザタブは開かない（古いタブが残らないようにするため）
 $invokedViaProtocol = $false
+$saveMode = $false
 if ($MarkdownPath -match '^(?i)mdtohtml:(?://)?(.+)$') {
 	$invokedViaProtocol = $true
-	$encoded = $matches[1].TrimEnd('/')
+	$rest = $matches[1]
+	# 保存サブコマンド: "save/<encoded_path>"
+	if ($rest -match '^(?i)save/(.+)$') {
+		$saveMode = $true
+		$encoded = $matches[1].TrimEnd('/')
+	} else {
+		$encoded = $rest.TrimEnd('/')
+	}
 	try {
 		$MarkdownPath = [System.Uri]::UnescapeDataString($encoded)
 	} catch {
@@ -166,6 +176,44 @@ if ([string]::IsNullOrWhiteSpace($MarkdownPath)) {
 
 if (-not (Test-Path -LiteralPath $MarkdownPath -PathType Leaf)) {
 	Show-FatalError "指定されたファイルが見つかりません:`r`n$MarkdownPath"
+}
+
+# -----------------------------------------------------
+# 保存モード：クリップボードから内容を読み取り、.md ファイルへ書き戻す
+# その後は通常通り HTML を再生成し、呼び出し元タブが reload して反映する
+# -----------------------------------------------------
+if ($saveMode) {
+	try {
+		# Get-Clipboard は内部で STA スレッドを起動するため、本体が MTA でも動作する
+		$newContent = Get-Clipboard -Raw -ErrorAction Stop
+	} catch {
+		Show-FatalError "クリップボードからの読み取りに失敗しました:`r`n$($_.Exception.Message)"
+	}
+
+	if ($null -eq $newContent) {
+		Show-FatalError "クリップボードにテキストがありません。保存を中止しました。"
+	}
+
+	# 行末コードを元ファイルに合わせる（CRLF を保持していたファイルを LF に置換しないように）
+	try {
+		$originalText = [System.IO.File]::ReadAllText($MarkdownPath, [System.Text.Encoding]::UTF8)
+		$useCRLF = ($originalText -match "`r`n")
+		# 一旦 LF に正規化してから、必要なら CRLF に戻す
+		$normalized = $newContent -replace "`r`n", "`n"
+		if ($useCRLF) {
+			$newContent = $normalized -replace "`n", "`r`n"
+		} else {
+			$newContent = $normalized
+		}
+	} catch {
+		# 改行統一に失敗しても保存自体は続行する
+	}
+
+	try {
+		Write-Utf8NoBom -Path $MarkdownPath -Content $newContent
+	} catch {
+		Show-FatalError "Markdown ファイルへの書き込みに失敗しました:`r`n$($_.Exception.Message)"
+	}
 }
 
 # -----------------------------------------------------

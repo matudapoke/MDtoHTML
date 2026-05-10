@@ -13,6 +13,8 @@
 
 	const STORAGE_KEY_THEME = "mdtohtml.theme";
 	const STORAGE_KEY_SIDEBAR = "mdtohtml.sidebar";
+	const STORAGE_KEY_EDIT = "mdtohtml.edit";
+	const STORAGE_KEY_SPLIT = "mdtohtml.split";
 
 	// ----- DOM 取得 -----
 	const contentEl = document.getElementById("content");
@@ -21,14 +23,28 @@
 	const themeToggleBtn = document.getElementById("theme-toggle");
 	const sidebarToggleBtn = document.getElementById("sidebar-toggle");
 	const refreshBtn = document.getElementById("refresh-btn");
+	const editToggleBtn = document.getElementById("edit-toggle");
+	const editCloseBtn = document.getElementById("edit-close-btn");
+	const saveBtn = document.getElementById("save-btn");
+	const editorEl = document.getElementById("editor");
+	const splitterEl = document.getElementById("splitter");
+	const workspaceEl = document.getElementById("workspace");
 	const mdSourceEl = document.getElementById("md-source");
 	const hljsLightLink = document.getElementById("hljs-light");
 	const hljsDarkLink = document.getElementById("hljs-dark");
 
+	// PS 側で </script> を <\/script> にエスケープしているため、編集用に復元する
+	function unescapeScriptCloseTag(text) {
+		return text.replace(/<\\\/script>/gi, "</script>");
+	}
+
+	// 現在のMarkdownソース（編集中はtextareaが真の状態）
+	let currentSource = mdSourceEl ? unescapeScriptCloseTag(mdSourceEl.textContent) : "";
+	// 保存済みソース（dirty判定用）
+	let savedSource = currentSource;
+
 	// ----- Markdown レンダリング -----
 	function renderMarkdown() {
-		const mdText = mdSourceEl ? mdSourceEl.textContent : "";
-
 		// marked のオプション設定
 		marked.setOptions({
 			gfm: true,
@@ -37,7 +53,7 @@
 			mangle: false
 		});
 
-		const html = marked.parse(mdText);
+		const html = marked.parse(currentSource);
 		contentEl.innerHTML = html;
 		contentEl.removeAttribute("aria-busy");
 
@@ -321,15 +337,14 @@
 				alert("ソースファイルパスが取得できませんでした。");
 				return;
 			}
+			// 編集中で未保存の変更がある場合は確認
+			if (isDirty() && !confirm("未保存の変更があります。破棄して再生成しますか？")) {
+				return;
+			}
 			// プロトコル発火は隠しリンクのクリックで行う（現タブを遷移させない）。
 			// PowerShell 側はプロトコル呼び出し時、出力 HTML を同じパスへ上書きし
 			// 新しいタブは開かない。少し待ってから現タブを reload して結果を反映する。
-			const a = document.createElement("a");
-			a.href = "mdtohtml:" + encodeURIComponent(path);
-			a.style.display = "none";
-			document.body.appendChild(a);
-			a.click();
-			a.remove();
+			triggerProtocol("mdtohtml:" + encodeURIComponent(path));
 
 			// PowerShell の処理時間を見込んで reload。多少長めに設定。
 			refreshBtn.disabled = true;
@@ -340,6 +355,241 @@
 		});
 	}
 
+	// プロトコルURL を発火（隠しリンク経由で現タブを遷移させない）
+	function triggerProtocol(url) {
+		const a = document.createElement("a");
+		a.href = url;
+		a.style.display = "none";
+		document.body.appendChild(a);
+		a.click();
+		a.remove();
+	}
+
+	// ----- 編集モード -----
+	function isDirty() {
+		return currentSource !== savedSource;
+	}
+
+	function updateSaveButtonState() {
+		if (!saveBtn) return;
+		saveBtn.classList.toggle("is-dirty", isDirty());
+	}
+
+	function applyEditMode(on) {
+		document.body.classList.toggle("edit-mode", on);
+		// アイコンは変えず、押下状態だけクラスで表現する
+		if (editToggleBtn) {
+			editToggleBtn.classList.toggle("is-active", on);
+			editToggleBtn.setAttribute("aria-pressed", on ? "true" : "false");
+			editToggleBtn.title = on ? "編集モードを終了" : "編集モード切替";
+		}
+		if (on && editorEl) {
+			// 編集開始時：textareaの内容を最新ソースに同期
+			if (editorEl.value !== currentSource) {
+				editorEl.value = currentSource;
+			}
+			// フォーカスを当てて編集しやすくする
+			setTimeout(() => editorEl.focus(), 0);
+		}
+	}
+
+	function initEditMode() {
+		const saved = localStorage.getItem(STORAGE_KEY_EDIT);
+		const on = saved === "on";
+		// 初期化時にtextareaへ現在のソースを流し込む
+		if (editorEl) editorEl.value = currentSource;
+		applyEditMode(on);
+	}
+
+	if (editToggleBtn) {
+		editToggleBtn.addEventListener("click", () => {
+			const on = !document.body.classList.contains("edit-mode");
+			applyEditMode(on);
+			localStorage.setItem(STORAGE_KEY_EDIT, on ? "on" : "off");
+		});
+	}
+
+	// 編集ペイン右上の × ボタン：編集モードを終了
+	if (editCloseBtn) {
+		editCloseBtn.addEventListener("click", () => {
+			applyEditMode(false);
+			localStorage.setItem(STORAGE_KEY_EDIT, "off");
+		});
+	}
+
+	// ----- ライブプレビュー（即時反映：rAF で次フレームに描画を集約） -----
+	let renderScheduled = false;
+	if (editorEl) {
+		editorEl.addEventListener("input", () => {
+			currentSource = editorEl.value;
+			updateSaveButtonState();
+			if (!renderScheduled) {
+				renderScheduled = true;
+				requestAnimationFrame(() => {
+					renderScheduled = false;
+					renderMarkdown();
+				});
+			}
+		});
+
+		// Tab キーでインデント挿入（フォーカス移動を抑止）
+		editorEl.addEventListener("keydown", (ev) => {
+			if (ev.key === "Tab") {
+				ev.preventDefault();
+				const start = editorEl.selectionStart;
+				const end = editorEl.selectionEnd;
+				const indent = "\t";
+				editorEl.value = editorEl.value.slice(0, start) + indent + editorEl.value.slice(end);
+				editorEl.selectionStart = editorEl.selectionEnd = start + indent.length;
+				// input イベントを手動で発火
+				editorEl.dispatchEvent(new Event("input", { bubbles: true }));
+			} else if ((ev.ctrlKey || ev.metaKey) && ev.key === "s") {
+				// Ctrl+S で保存
+				ev.preventDefault();
+				if (saveBtn && !saveBtn.disabled) saveBtn.click();
+			}
+		});
+	}
+
+	// ----- 保存（mdtohtml://save/<path> 経由） -----
+	async function copyToClipboard(text) {
+		// 1) Async Clipboard API（モダンブラウザ・file://でも多くは可）
+		if (navigator.clipboard && navigator.clipboard.writeText) {
+			try {
+				await navigator.clipboard.writeText(text);
+				return true;
+			} catch (e) {
+				// permission拒否などは fallback へ
+			}
+		}
+		// 2) execCommand fallback
+		try {
+			const ta = document.createElement("textarea");
+			ta.value = text;
+			ta.style.position = "fixed";
+			ta.style.top = "0";
+			ta.style.left = "0";
+			ta.style.opacity = "0";
+			document.body.appendChild(ta);
+			ta.focus();
+			ta.select();
+			const ok = document.execCommand("copy");
+			ta.remove();
+			return ok;
+		} catch (e) {
+			return false;
+		}
+	}
+
+	async function saveContent() {
+		if (!saveBtn) return;
+		const path = getSourcePath();
+		if (!path) {
+			alert("ソースファイルパスが取得できませんでした。");
+			return;
+		}
+		const content = editorEl ? editorEl.value : currentSource;
+
+		saveBtn.disabled = true;
+		const prevText = saveBtn.textContent;
+		saveBtn.textContent = "…";
+
+		const copied = await copyToClipboard(content);
+		if (!copied) {
+			saveBtn.disabled = false;
+			saveBtn.textContent = prevText;
+			alert("クリップボードへのコピーに失敗しました。\nブラウザの権限設定を確認してください。");
+			return;
+		}
+
+		// プロトコル経由でPowerShellを起動：クリップボードを読んで .md に書き戻し、HTMLを再生成する
+		triggerProtocol("mdtohtml://save/" + encodeURIComponent(path));
+
+		// 保存完了とみなしてフラグ更新（reload で最新化される）
+		savedSource = content;
+		updateSaveButtonState();
+
+		// PowerShell の処理時間を見込んで reload
+		setTimeout(() => {
+			location.reload();
+		}, 1500);
+	}
+
+	if (saveBtn) {
+		saveBtn.addEventListener("click", () => {
+			saveContent();
+		});
+	}
+
+	// ページ離脱時の警告
+	window.addEventListener("beforeunload", (ev) => {
+		if (isDirty()) {
+			ev.preventDefault();
+			ev.returnValue = "";
+		}
+	});
+
+	// ----- スプリッター（プレビュー / エディタ間のサイズ調整） -----
+	function clampRatio(r) {
+		if (!isFinite(r)) return 0.5;
+		return Math.max(0.15, Math.min(0.85, r));
+	}
+
+	function applySplitRatio(ratio) {
+		if (!workspaceEl) return;
+		const r = clampRatio(ratio);
+		workspaceEl.style.gridTemplateColumns = r.toFixed(4) + "fr 6px " + (1 - r).toFixed(4) + "fr";
+	}
+
+	function ratioFromPointer(ev) {
+		const wsRect = workspaceEl.getBoundingClientRect();
+		if (wsRect.width <= 0) return 0.5;
+		return clampRatio((ev.clientX - wsRect.left) / wsRect.width);
+	}
+
+	function initSplitter() {
+		const saved = parseFloat(localStorage.getItem(STORAGE_KEY_SPLIT));
+		if (!isNaN(saved)) {
+			applySplitRatio(saved);
+		}
+	}
+
+	if (splitterEl && workspaceEl) {
+		let isDragging = false;
+
+		splitterEl.addEventListener("pointerdown", (ev) => {
+			if (!document.body.classList.contains("edit-mode")) return;
+			ev.preventDefault();
+			isDragging = true;
+			document.body.classList.add("is-resizing");
+			try { splitterEl.setPointerCapture(ev.pointerId); } catch (e) { /* noop */ }
+		});
+
+		splitterEl.addEventListener("pointermove", (ev) => {
+			if (!isDragging) return;
+			applySplitRatio(ratioFromPointer(ev));
+		});
+
+		const endDrag = (ev) => {
+			if (!isDragging) return;
+			isDragging = false;
+			document.body.classList.remove("is-resizing");
+			try { splitterEl.releasePointerCapture(ev.pointerId); } catch (e) { /* noop */ }
+			if (ev && typeof ev.clientX === "number") {
+				localStorage.setItem(STORAGE_KEY_SPLIT, String(ratioFromPointer(ev)));
+			}
+		};
+
+		splitterEl.addEventListener("pointerup", endDrag);
+		splitterEl.addEventListener("pointercancel", endDrag);
+
+		// ダブルクリックで 50:50 にリセット
+		splitterEl.addEventListener("dblclick", () => {
+			applySplitRatio(0.5);
+			localStorage.setItem(STORAGE_KEY_SPLIT, "0.5");
+		});
+	}
+
 	// ----- 初期化 -----
 	function init() {
 		initTheme();
@@ -347,6 +597,9 @@
 		const items = buildToc();
 		setupScrollSpy(items);
 		initSidebar();
+		initSplitter();
+		initEditMode();
+		updateSaveButtonState();
 
 		// URL ハッシュがあれば該当箇所へスクロール
 		if (location.hash) {
