@@ -221,6 +221,32 @@ body.sidebar-open {
 	height: auto;
 }
 
+/* ---- Mermaid 図 ---- */
+/* default テーマ固定。ダーク時も白背景を維持して図中の文字を読みやすくする */
+.markdown-body .mermaid {
+	margin: 1em 0;
+	padding: 1em;
+	text-align: center;
+	background: #ffffff;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	overflow-x: auto;
+}
+
+.markdown-body .mermaid svg {
+	max-width: 100%;
+	height: auto;
+}
+
+/* レンダリング前（テキスト状態）の見た目を整える */
+.markdown-body .mermaid:not([data-processed="true"]) {
+	font-family: "Consolas", "SF Mono", "Menlo", "Liberation Mono", monospace;
+	font-size: 0.85em;
+	color: var(--fg-muted);
+	white-space: pre;
+	text-align: left;
+}
+
 /* ---- ツールバー（左上の固定ボタン群） ---- */
 /* サイドバーの開閉に関わらず常に同じ位置に固定。サイドバー展開時はサイドバー上に重なる */
 .toolbar {

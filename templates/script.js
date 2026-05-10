@@ -41,7 +41,11 @@
 		contentEl.innerHTML = html;
 		contentEl.removeAttribute("aria-busy");
 
-		// コードハイライト
+		// Mermaid: ```mermaid ブロックを <div class="mermaid"> に置換
+		// （hljs より先に行い、コードハイライト対象から外す）
+		transformMermaidBlocks();
+
+		// コードハイライト（Mermaid 用 div は対象外）
 		if (window.hljs) {
 			contentEl.querySelectorAll("pre code").forEach((block) => {
 				try {
@@ -50,6 +54,42 @@
 					// ハイライト失敗時は無視（プレーン表示）
 				}
 			});
+		}
+
+		// Mermaid 描画（mermaid 読み込み完了を待ってから実行）
+		renderMermaidDiagrams();
+	}
+
+	// ----- Mermaid -----
+	// marked が生成する <pre><code class="language-mermaid">…</code></pre> を
+	// <div class="mermaid">…</div> に置換する。
+	function transformMermaidBlocks() {
+		const blocks = contentEl.querySelectorAll('pre > code.language-mermaid');
+		blocks.forEach((codeEl) => {
+			const pre = codeEl.parentElement;
+			const div = document.createElement('div');
+			div.className = 'mermaid';
+			div.textContent = codeEl.textContent;
+			pre.replaceWith(div);
+		});
+	}
+
+	function renderMermaidDiagrams() {
+		const targets = contentEl.querySelectorAll('.mermaid');
+		if (targets.length === 0) return;
+
+		const run = () => {
+			try {
+				window.mermaid.run({ nodes: targets });
+			} catch (e) {
+				console.warn('Mermaid render failed:', e);
+			}
+		};
+
+		if (window.mermaid) {
+			run();
+		} else {
+			window.addEventListener('mermaid-ready', run, { once: true });
 		}
 	}
 

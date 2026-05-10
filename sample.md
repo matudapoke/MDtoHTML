@@ -50,6 +50,32 @@ print(hello("World"))
 
 [GitHub](https://github.com) へのリンク。
 
+### Mermaid 図
+
+フローチャート:
+
+```mermaid
+graph LR
+	A[開始] --> B{条件分岐}
+	B -->|Yes| C[処理1]
+	B -->|No| D[処理2]
+	C --> E[終了]
+	D --> E
+```
+
+シーケンス図:
+
+```mermaid
+sequenceDiagram
+	participant U as ユーザー
+	participant B as ブラウザ
+	participant S as サーバー
+	U->>B: ボタン押下
+	B->>S: APIリクエスト
+	S-->>B: レスポンス
+	B-->>U: 結果表示
+```
+
 ## 第二章
 
 ### サブセクションA
