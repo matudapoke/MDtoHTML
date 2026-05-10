@@ -1,0 +1,207 @@
+﻿# =====================================================
+# Convert-MDtoHTML.ps1
+# Markdown ファイルを HTML に変換し、既定ブラウザで開く
+#
+# 使い方:
+#   引数なし : ファイル選択ダイアログを表示
+#   引数あり : 指定された .md ファイルを変換
+# =====================================================
+
+[CmdletBinding()]
+param(
+	[Parameter(Position = 0, Mandatory = $false)]
+	[string]$MarkdownPath
+)
+
+$ErrorActionPreference = "Stop"
+
+# -----------------------------------------------------
+# ユーティリティ関数
+# -----------------------------------------------------
+
+# 致命的エラーを画面に表示して終了
+function Show-FatalError {
+	param([string]$Message)
+	Add-Type -AssemblyName System.Windows.Forms | Out-Null
+	[System.Windows.Forms.MessageBox]::Show($Message, "MDtoHTML エラー",
+		[System.Windows.Forms.MessageBoxButtons]::OK,
+		[System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
+	exit 1
+}
+
+# ファイル選択ダイアログを表示
+function Select-MarkdownFile {
+	Add-Type -AssemblyName System.Windows.Forms | Out-Null
+	$dialog = New-Object System.Windows.Forms.OpenFileDialog
+	$dialog.Title = "Markdown ファイルを選択"
+	$dialog.Filter = "Markdown (*.md;*.markdown)|*.md;*.markdown|すべてのファイル (*.*)|*.*"
+	$dialog.Multiselect = $false
+
+	if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+		return $dialog.FileName
+	}
+	return $null
+}
+
+# UTF-8 (BOM なし) でファイルを書き出す
+function Write-Utf8NoBom {
+	param(
+		[string]$Path,
+		[string]$Content
+	)
+	$utf8 = New-Object System.Text.UTF8Encoding($false)
+	[System.IO.File]::WriteAllText($Path, $Content, $utf8)
+}
+
+# 出力先ディレクトリを取得（存在しなければ作成）
+function Get-OutputDirectory {
+	$dir = Join-Path $env:TEMP "MDtoHTML"
+	if (-not (Test-Path -LiteralPath $dir)) {
+		New-Item -ItemType Directory -Path $dir -Force | Out-Null
+	}
+	return $dir
+}
+
+# 既定ブラウザの実行ファイルパスを取得
+# ※ HTML の関連付け（.html）ではなく、http プロトコルの既定ハンドラを使う
+function Get-DefaultBrowserPath {
+	try {
+		# Windows 10/11: ユーザー選択のブラウザは UrlAssociations\http\UserChoice に記録される
+		$userChoice = Get-ItemProperty `
+			-Path "Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice" `
+			-Name ProgId -ErrorAction Stop
+		$progId = $userChoice.ProgId
+
+		# ProgId から実行コマンドを取得
+		$cmdKey = "Registry::HKEY_CLASSES_ROOT\$progId\shell\open\command"
+		$cmd = (Get-ItemProperty -Path $cmdKey -ErrorAction Stop).'(default)'
+
+		# 例: "C:\...\vivaldi.exe" --single-argument %1 から exe パスを抽出
+		$exe = $null
+		if ($cmd -match '^\s*"([^"]+\.exe)"') {
+			$exe = $matches[1]
+		} elseif ($cmd -match '^\s*([^\s]+\.exe)') {
+			$exe = $matches[1]
+		}
+
+		if ($exe -and (Test-Path -LiteralPath $exe -PathType Leaf)) {
+			return $exe
+		}
+	} catch {
+		# 失敗時は null を返してフォールバックさせる
+	}
+	return $null
+}
+
+# 生成済み HTML を既定ブラウザで開く
+function Open-InDefaultBrowser {
+	param([string]$Path)
+
+	$browser = Get-DefaultBrowserPath
+	if ($browser) {
+		# ブラウザ実行ファイルに直接渡す（.html の関連付けに依存しない）
+		Start-Process -FilePath $browser -ArgumentList "`"$Path`"" | Out-Null
+		return
+	}
+
+	# フォールバック: file:// URL をシェルに渡す（URL ハンドラ＝ブラウザに送られやすい）
+	try {
+		$uri = ([System.Uri]$Path).AbsoluteUri
+		Start-Process -FilePath $uri | Out-Null
+		return
+	} catch {
+		# 最終フォールバック：拡張子の関連付けに任せる
+		Start-Process -FilePath $Path | Out-Null
+	}
+}
+
+# -----------------------------------------------------
+# 入力ファイルの決定
+# -----------------------------------------------------
+if ([string]::IsNullOrWhiteSpace($MarkdownPath)) {
+	$MarkdownPath = Select-MarkdownFile
+	if ([string]::IsNullOrWhiteSpace($MarkdownPath)) {
+		# キャンセル時は静かに終了
+		exit 0
+	}
+}
+
+if (-not (Test-Path -LiteralPath $MarkdownPath -PathType Leaf)) {
+	Show-FatalError "指定されたファイルが見つかりません:`r`n$MarkdownPath"
+}
+
+# -----------------------------------------------------
+# テンプレート群の読み込み
+# -----------------------------------------------------
+$scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$projectRoot = Split-Path -Parent $scriptRoot
+$templateDir = Join-Path $projectRoot "templates"
+
+$templatePath = Join-Path $templateDir "template.html"
+$stylePath    = Join-Path $templateDir "style.css"
+$scriptPath   = Join-Path $templateDir "script.js"
+
+foreach ($p in @($templatePath, $stylePath, $scriptPath)) {
+	if (-not (Test-Path -LiteralPath $p -PathType Leaf)) {
+		Show-FatalError "テンプレートファイルが見つかりません:`r`n$p"
+	}
+}
+
+try {
+	$templateHtml = [System.IO.File]::ReadAllText($templatePath, [System.Text.Encoding]::UTF8)
+	$styleCss     = [System.IO.File]::ReadAllText($stylePath,    [System.Text.Encoding]::UTF8)
+	$appJs        = [System.IO.File]::ReadAllText($scriptPath,   [System.Text.Encoding]::UTF8)
+	$markdownText = [System.IO.File]::ReadAllText($MarkdownPath, [System.Text.Encoding]::UTF8)
+} catch {
+	Show-FatalError "ファイル読み込みに失敗しました:`r`n$($_.Exception.Message)"
+}
+
+# -----------------------------------------------------
+# プレースホルダ置換
+# -----------------------------------------------------
+$mdFileItem = Get-Item -LiteralPath $MarkdownPath
+$title = $mdFileItem.BaseName
+
+# Markdown 内に </script> が含まれる場合、script タグが破壊されるためエスケープ
+$mdEscaped = $markdownText -replace '</script>', '<\/script>'
+
+# style/script 内の同様な競合は通常起きないが、念のためエスケープ
+$styleEscaped = $styleCss   -replace '</style>',  '<\/style>'
+$scriptEscaped = $appJs     -replace '</script>', '<\/script>'
+
+# .NET の Replace を使用（PowerShell の -replace は正規表現のため誤爆を避ける）
+$html = $templateHtml.Replace('{{TITLE}}',    [System.Net.WebUtility]::HtmlEncode($title))
+$html = $html.Replace('{{STYLE}}',    $styleEscaped)
+$html = $html.Replace('{{SCRIPT}}',   $scriptEscaped)
+$html = $html.Replace('{{MARKDOWN}}', $mdEscaped)
+
+# -----------------------------------------------------
+# 出力先（一時フォルダ）に書き出し
+# -----------------------------------------------------
+$outDir = Get-OutputDirectory
+
+# ファイル名衝突を避けるためハッシュ付加
+$hash = [System.BitConverter]::ToString(
+	[System.Security.Cryptography.MD5]::Create().ComputeHash(
+		[System.Text.Encoding]::UTF8.GetBytes($mdFileItem.FullName)
+	)
+).Replace("-", "").Substring(0, 8).ToLower()
+
+$safeName = $mdFileItem.BaseName -replace '[\\/:*?"<>|]', '_'
+$outFileName = "{0}_{1}.html" -f $safeName, $hash
+$outPath = Join-Path $outDir $outFileName
+
+try {
+	Write-Utf8NoBom -Path $outPath -Content $html
+} catch {
+	Show-FatalError "HTML 書き出しに失敗しました:`r`n$($_.Exception.Message)"
+}
+
+# -----------------------------------------------------
+# 既定ブラウザで開く
+# -----------------------------------------------------
+try {
+	Open-InDefaultBrowser -Path $outPath
+} catch {
+	Show-FatalError "ブラウザ起動に失敗しました:`r`n$($_.Exception.Message)"
+}

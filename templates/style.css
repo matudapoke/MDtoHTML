@@ -1,0 +1,374 @@
+/* ========================================
+   MDtoHTML 共通スタイル
+   - ライト/ダークは body.theme-dark で切替
+   - 構文ごとにクラスを分離し、カスタム差し替えを容易にする
+   ======================================== */
+
+/* ---- カラーテーマ変数 ---- */
+:root {
+	--bg: #ffffff;
+	--fg: #24292f;
+	--fg-muted: #57606a;
+	--border: #d0d7de;
+	--code-bg: #f6f8fa;
+	--code-fg: #24292f;
+	--blockquote-fg: #57606a;
+	--blockquote-border: #d0d7de;
+	--link: #0969da;
+	--link-hover: #0550ae;
+	--table-stripe: #f6f8fa;
+	--sidebar-bg: #ffffff;
+	--sidebar-border: #d0d7de;
+	--sidebar-active: #ddf4ff;
+	--sidebar-active-fg: #0969da;
+	--toolbar-bg: rgba(255, 255, 255, 0.85);
+	--shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+body.theme-dark {
+	--bg: #0d1117;
+	--fg: #e6edf3;
+	--fg-muted: #8b949e;
+	--border: #30363d;
+	--code-bg: #161b22;
+	--code-fg: #e6edf3;
+	--blockquote-fg: #8b949e;
+	--blockquote-border: #30363d;
+	--link: #2f81f7;
+	--link-hover: #58a6ff;
+	--table-stripe: #161b22;
+	--sidebar-bg: #0d1117;
+	--sidebar-border: #30363d;
+	--sidebar-active: #1f2937;
+	--sidebar-active-fg: #58a6ff;
+	--toolbar-bg: rgba(13, 17, 23, 0.85);
+	--shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* ---- ベース ---- */
+* {
+	box-sizing: border-box;
+}
+
+html, body {
+	margin: 0;
+	padding: 0;
+	background: var(--bg);
+	color: var(--fg);
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Yu Gothic UI", "Meiryo", Helvetica, Arial, sans-serif;
+	font-size: 16px;
+	line-height: 1.7;
+	-webkit-font-smoothing: antialiased;
+}
+
+/* サイドバー表示時、本文領域全体を右にシフト（本文の最大幅は維持される） */
+body {
+	transition: padding-left 0.25s ease;
+}
+
+body.sidebar-open {
+	padding-left: 300px;
+}
+
+/* ---- 本文レイアウト ---- */
+/* padding-bottom を viewport 単位で確保し、最後の見出しもページ最上部までスクロール可能にする */
+.markdown-body {
+	max-width: 900px;
+	margin: 0 auto;
+	padding: 56px 32px 90vh;
+}
+
+/* ---- 見出し ---- */
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+	margin-top: 1.8em;
+	margin-bottom: 0.6em;
+	line-height: 1.3;
+	font-weight: 600;
+	scroll-margin-top: 24px;
+}
+
+.markdown-body h1 {
+	font-size: 2em;
+	border-bottom: 1px solid var(--border);
+	padding-bottom: 0.3em;
+}
+
+.markdown-body h2 {
+	font-size: 1.5em;
+	border-bottom: 1px solid var(--border);
+	padding-bottom: 0.3em;
+}
+
+.markdown-body h3 { font-size: 1.25em; }
+.markdown-body h4 { font-size: 1.1em; }
+.markdown-body h5 { font-size: 1em; }
+.markdown-body h6 {
+	font-size: 0.9em;
+	color: var(--fg-muted);
+}
+
+/* ---- 段落・テキスト ---- */
+.markdown-body p {
+	margin: 0.8em 0;
+}
+
+.markdown-body a {
+	color: var(--link);
+	text-decoration: none;
+}
+
+.markdown-body a:hover {
+	color: var(--link-hover);
+	text-decoration: underline;
+}
+
+/* ---- リスト ---- */
+.markdown-body ul,
+.markdown-body ol {
+	padding-left: 2em;
+	margin: 0.8em 0;
+}
+
+.markdown-body li + li {
+	margin-top: 0.25em;
+}
+
+/* チェックリスト */
+.markdown-body input[type="checkbox"] {
+	margin-right: 0.4em;
+	transform: translateY(1px);
+}
+
+/* ---- 引用 ---- */
+.markdown-body blockquote {
+	margin: 1em 0;
+	padding: 0.4em 1em;
+	color: var(--blockquote-fg);
+	border-left: 4px solid var(--blockquote-border);
+	background: var(--code-bg);
+}
+
+.markdown-body blockquote > :first-child { margin-top: 0; }
+.markdown-body blockquote > :last-child { margin-bottom: 0; }
+
+/* ---- コード ---- */
+.markdown-body code {
+	font-family: "Consolas", "SF Mono", "Menlo", "Liberation Mono", monospace;
+	font-size: 0.9em;
+	background: var(--code-bg);
+	color: var(--code-fg);
+	padding: 0.2em 0.4em;
+	border-radius: 4px;
+}
+
+.markdown-body pre {
+	background: var(--code-bg);
+	padding: 1em;
+	border-radius: 6px;
+	overflow-x: auto;
+	margin: 1em 0;
+	border: 1px solid var(--border);
+}
+
+.markdown-body pre code {
+	background: transparent;
+	padding: 0;
+	font-size: 0.875em;
+	line-height: 1.5;
+}
+
+/* ---- テーブル ---- */
+.markdown-body table {
+	border-collapse: collapse;
+	margin: 1em 0;
+	display: block;
+	overflow-x: auto;
+	width: max-content;
+	max-width: 100%;
+}
+
+.markdown-body th,
+.markdown-body td {
+	border: 1px solid var(--border);
+	padding: 0.5em 0.9em;
+	text-align: left;
+}
+
+.markdown-body th {
+	background: var(--code-bg);
+	font-weight: 600;
+}
+
+.markdown-body tbody tr:nth-child(even) {
+	background: var(--table-stripe);
+}
+
+/* ---- 水平線 ---- */
+.markdown-body hr {
+	border: 0;
+	border-top: 1px solid var(--border);
+	margin: 2em 0;
+}
+
+/* ---- 画像 ---- */
+.markdown-body img {
+	max-width: 100%;
+	height: auto;
+}
+
+/* ---- ツールバー（左上の固定ボタン群、サイドバー開閉に追従） ---- */
+.toolbar {
+	position: fixed;
+	top: 12px;
+	left: 16px;
+	display: flex;
+	gap: 8px;
+	z-index: 30;
+	transition: left 0.25s ease;
+}
+
+/* サイドバーが開いている時はサイドバーの右隣に逃がす */
+body.sidebar-open .toolbar {
+	left: 316px;
+}
+
+.toolbar button,
+.sidebar-header button {
+	background: var(--toolbar-bg);
+	color: var(--fg);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	width: 36px;
+	height: 36px;
+	font-size: 16px;
+	cursor: pointer;
+	box-shadow: var(--shadow);
+	backdrop-filter: blur(8px);
+	transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.toolbar button:hover,
+.sidebar-header button:hover {
+	transform: translateY(-1px);
+}
+
+/* ---- サイドバー（左側固定） ---- */
+#sidebar {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 300px;
+	height: 100vh;
+	background: var(--sidebar-bg);
+	border-right: 1px solid var(--sidebar-border);
+	box-shadow: var(--shadow);
+	overflow-y: auto;
+	transform: translateX(-100%);
+	transition: transform 0.25s ease;
+	z-index: 20;
+	display: flex;
+	flex-direction: column;
+}
+
+body.sidebar-open #sidebar {
+	transform: translateX(0);
+}
+
+.sidebar-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 12px 16px;
+	border-bottom: 1px solid var(--sidebar-border);
+	font-weight: 600;
+	position: sticky;
+	top: 0;
+	background: var(--sidebar-bg);
+	z-index: 1;
+}
+
+.sidebar-header button {
+	width: 28px;
+	height: 28px;
+	font-size: 18px;
+	box-shadow: none;
+}
+
+#toc {
+	padding: 12px 8px;
+	flex: 1;
+	overflow-y: auto;
+}
+
+#toc ul {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+
+#toc li {
+	margin: 0;
+}
+
+#toc a {
+	display: block;
+	padding: 4px 12px;
+	color: var(--fg-muted);
+	text-decoration: none;
+	border-left: 2px solid transparent;
+	font-size: 0.9em;
+	line-height: 1.4;
+	transition: background 0.1s ease, color 0.1s ease;
+	word-break: break-word;
+}
+
+#toc a:hover {
+	color: var(--fg);
+	background: var(--code-bg);
+}
+
+#toc a.toc-h2 { padding-left: 24px; }
+#toc a.toc-h3 { padding-left: 36px; font-size: 0.85em; }
+#toc a.toc-h4 { padding-left: 48px; font-size: 0.8em; }
+#toc a.toc-h5 { padding-left: 60px; font-size: 0.78em; }
+#toc a.toc-h6 { padding-left: 72px; font-size: 0.76em; }
+
+/* スクロール連動：現在位置のハイライト */
+#toc a.active {
+	background: var(--sidebar-active);
+	color: var(--sidebar-active-fg);
+	border-left-color: var(--sidebar-active-fg);
+	font-weight: 600;
+}
+
+/* ---- 狭い画面：サイドバーは本文を押し出さずオーバーレイ表示 ---- */
+@media (max-width: 1100px) {
+	body.sidebar-open {
+		padding-left: 0;
+	}
+
+	#sidebar {
+		width: 280px;
+	}
+
+	body.sidebar-open .toolbar {
+		left: 296px;
+	}
+}
+
+/* ---- 印刷 ---- */
+@media print {
+	.toolbar,
+	#sidebar {
+		display: none !important;
+	}
+
+	body.sidebar-open {
+		padding-left: 0;
+	}
+}
