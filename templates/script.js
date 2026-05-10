@@ -20,7 +20,6 @@
 	const sidebarEl = document.getElementById("sidebar");
 	const themeToggleBtn = document.getElementById("theme-toggle");
 	const sidebarToggleBtn = document.getElementById("sidebar-toggle");
-	const sidebarCloseBtn = document.getElementById("sidebar-close");
 	const refreshBtn = document.getElementById("refresh-btn");
 	const mdSourceEl = document.getElementById("md-source");
 	const hljsLightLink = document.getElementById("hljs-light");
@@ -265,11 +264,6 @@
 		const open = !document.body.classList.contains("sidebar-open");
 		applySidebar(open);
 		localStorage.setItem(STORAGE_KEY_SIDEBAR, open ? "open" : "closed");
-	});
-
-	sidebarCloseBtn.addEventListener("click", () => {
-		applySidebar(false);
-		localStorage.setItem(STORAGE_KEY_SIDEBAR, "closed");
 	});
 
 	// ----- 更新（HTML 再生成） -----
